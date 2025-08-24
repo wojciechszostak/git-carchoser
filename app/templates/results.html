@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+  <section>
+    <h2>TOP 5 rekomendacji</h2>
+    <ol class="top5">
+      {% for car in top5 %}
+        <li>
+          <a href="{{ car.link }}" target="_blank" rel="noopener noreferrer">{{ car.title or '(brak tytułu)' }}</a>
+          <div class="meta">
+            <span>{{ car.year or '?' }}</span>
+            <span>{{ (car.price | int) if car.price else '?' }} PLN</span>
+            <span>{{ (car.mileage | int) if car.mileage else '?' }} km</span>
+            <span>{{ car.power_hp or '?' }} KM</span>
+            <span>{{ car.fuel_type or '' }}</span>
+            <span>{{ car.gearbox or '' }}</span>
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  </section>
+  <section>
+    <h2>Wyniki filtrowania (max 50)</h2>
+    <table>
+      <thead>
+        <tr><th>Tytuł</th><th>Cena</th><th>Rok</th><th>Przebieg</th><th>Moc</th><th>Paliwo</th><th>Skrzynia</th><th>Miasto</th><th>Woj.</th></tr>
+      </thead>
+      <tbody>
+        {% for car in results %}
+          <tr>
+            <td><a href="{{ car.link }}" target="_blank" rel="noopener noreferrer">{{ car.title or '(brak)' }}</a></td>
+            <td>{{ (car.price | int) if car.price else '' }}</td>
+            <td>{{ car.year or '' }}</td>
+            <td>{{ (car.mileage | int) if car.mileage else '' }}</td>
+            <td>{{ car.power_hp or '' }}</td>
+            <td>{{ car.fuel_type or '' }}</td>
+            <td>{{ car.gearbox or '' }}</td>
+            <td>{{ car.city or '' }}</td>
+            <td>{{ car.voivodeship or '' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+  <form method="post" action="/results" class="form">
+    <div class="grid">
+      <label>Rodzaj paliwa
+        <select name="fuel_type">
+          <option value="">(dowolny)</option>
+          {% for x in fuel_types %}<option value="{{ x }}">{{ x }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Skrzynia biegów
+        <select name="gearbox">
+          <option value="">(dowolna)</option>
+          {% for x in gearboxes %}<option value="{{ x }}">{{ x }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Województwo
+        <select name="voivodeship">
+          <option value="">(dowolne)</option>
+          {% for x in voivodeships %}<option value="{{ x }}">{{ x }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Cena min [PLN]<input type="number" name="price_min" min="0" step="1000" /></label>
+      <label>Cena max [PLN]<input type="number" name="price_max" min="0" step="1000" /></label>
+      <label>Rok od<input type="number" name="year_min" min="1950" max="2100" /></label>
+      <label>Rok do<input type="number" name="year_max" min="1950" max="2100" /></label>
+      <label>Przebieg max [km]<input type="number" name="mileage_max" min="0" step="1000" /></label>
+      <label>Moc min [KM]<input type="number" name="power_min" min="0" step="10" /></label>
+    </div>
+    <div class="actions"><button type="submit">Szukaj</button></div>
+  </form>
+{% endblock %}
