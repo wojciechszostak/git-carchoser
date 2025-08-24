@@ -14,3 +14,7 @@ button:hover { opacity: .9; }
 table { width: 100%; border-collapse: collapse; background: #fff; }
 th, td { padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
 th { text-align: left; background: #f6f6f6; }
+.weights { margin-top: 24px; border: 1px solid #eee; padding: 16px; border-radius: 10px; background: #fff; }
+.weights-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 16px; }
+.weights label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+.weights output { min-width: 2ch; text-align: right; font-variant-numeric: tabular-nums; }

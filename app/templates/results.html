@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
   <section>
-    <h2>TOP 5 rekomendacji</h2>
+    <h2>TOP 5 (Twoje wagi: cena {{ (w_raw.price | int) }} • przebieg {{ (w_raw.mileage | int) }} • rok {{ (w_raw.year | int) }} • moc {{ (w_raw.power | int) }})</h2>
     <ol class="top5">
       {% for car in top5 %}
         <li>
@@ -18,8 +18,9 @@
       {% endfor %}
     </ol>
   </section>
+
   <section>
-    <h2>Wyniki filtrowania (max 50)</h2>
+    <h2>Wyniki (max 50)</h2>
     <table>
       <thead>
         <tr><th>Tytuł</th><th>Cena</th><th>Rok</th><th>Przebieg</th><th>Moc</th><th>Paliwo</th><th>Skrzynia</th><th>Miasto</th><th>Woj.</th></tr>

@@ -20,13 +20,76 @@
           {% for x in voivodeships %}<option value="{{ x }}">{{ x }}</option>{% endfor %}
         </select>
       </label>
-      <label>Cena min [PLN]<input type="number" name="price_min" min="0" step="1000" /></label>
-      <label>Cena max [PLN]<input type="number" name="price_max" min="0" step="1000" /></label>
-      <label>Rok od<input type="number" name="year_min" min="1950" max="2100" /></label>
-      <label>Rok do<input type="number" name="year_max" min="1950" max="2100" /></label>
-      <label>Przebieg max [km]<input type="number" name="mileage_max" min="0" step="1000" /></label>
-      <label>Moc min [KM]<input type="number" name="power_min" min="0" step="10" /></label>
+
+      <label>Cena min [PLN]
+        <input type="number" name="price_min" min="0" step="1000" />
+      </label>
+      <label>Cena max [PLN]
+        <input type="number" name="price_max" min="0" step="1000" />
+      </label>
+      <label>Rok od
+        <input type="number" name="year_min" min="1950" max="2100" />
+      </label>
+      <label>Rok do
+        <input type="number" name="year_max" min="1950" max="2100" />
+      </label>
+      <label>Przebieg max [km]
+        <input type="number" name="mileage_max" min="0" step="1000" />
+      </label>
+      <label>Moc min [KM]
+        <input type="number" name="power_min" min="0" step="10" />
+      </label>
     </div>
-    <div class="actions"><button type="submit">Szukaj</button></div>
+
+<fieldset class="weights">
+  <legend>Co jest dla Ciebie najważniejsze?</legend>
+  <p>Suwaki 0–10. Suma nie musi być równa 10 – serwer je znormalizuje i (wewnętrznie) mocno wzmocni.</p>
+
+  <div class="weights-grid">
+    <label class="weight">
+      <span>Cena (<output data-for="w_price"></output>)</span>
+      <input type="range" name="w_price" min="0" max="10" step="1" value="{{ w_price }}">
+    </label>
+    <label class="weight">
+      <span>Przebieg (<output data-for="w_mileage"></output>)</span>
+      <input type="range" name="w_mileage" min="0" max="10" step="1" value="{{ w_mileage }}">
+    </label>
+    <label class="weight">
+      <span>Rok (<output data-for="w_year"></output>)</span>
+      <input type="range" name="w_year" min="0" max="10" step="1" value="{{ w_year }}">
+    </label>
+    <label class="weight">
+      <span>Moc (<output data-for="w_power"></output>)</span>
+      <input type="range" name="w_power" min="0" max="10" step="1" value="{{ w_power }}">
+    </label>
+  </div>
+</fieldset>
+
+<script>
+  // Podgląd liczby przy nazwach
+  document.querySelectorAll('.weights input[type="range"]').forEach(r => {
+    const out = document.querySelector(`output[data-for="${r.name}"]`);
+    if (!out) return;
+    const upd = () => { out.textContent = r.value; };
+    r.addEventListener('input', upd);
+    upd();
+  });
+</script>
+
+
+    <div class="actions">
+      <button type="submit">Szukaj</button>
+    </div>
   </form>
+
+  <script>
+    // Podgląd liczby tuż obok nazwy kategorii (w nawiasie)
+    document.querySelectorAll('.weights input[type="range"]').forEach(r => {
+      const out = document.querySelector(`output[data-for="${r.name}"]`);
+      if (!out) return;
+      const upd = () => { out.textContent = r.value; };
+      r.addEventListener('input', upd);
+      upd();
+    });
+  </script>
 {% endblock %}
