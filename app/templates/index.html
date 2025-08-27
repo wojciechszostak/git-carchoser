@@ -1,95 +1,756 @@
 {% extends "base.html" %}
 {% block content %}
-  <form method="post" action="/results" class="form">
-    <div class="grid">
-      <label>Rodzaj paliwa
-        <select name="fuel_type">
-          <option value="">(dowolny)</option>
-          {% for x in fuel_types %}<option value="{{ x }}">{{ x }}</option>{% endfor %}
-        </select>
-      </label>
-      <label>Skrzynia biegów
-        <select name="gearbox">
-          <option value="">(dowolna)</option>
-          {% for x in gearboxes %}<option value="{{ x }}">{{ x }}</option>{% endfor %}
-        </select>
-      </label>
-      <label>Województwo
-        <select name="voivodeship">
-          <option value="">(dowolne)</option>
-          {% for x in voivodeships %}<option value="{{ x }}">{{ x }}</option>{% endfor %}
-        </select>
-      </label>
-
-      <label>Cena min [PLN]
-        <input type="number" name="price_min" min="0" step="1000" />
-      </label>
-      <label>Cena max [PLN]
-        <input type="number" name="price_max" min="0" step="1000" />
-      </label>
-      <label>Rok od
-        <input type="number" name="year_min" min="1950" max="2100" />
-      </label>
-      <label>Rok do
-        <input type="number" name="year_max" min="1950" max="2100" />
-      </label>
-      <label>Przebieg max [km]
-        <input type="number" name="mileage_max" min="0" step="1000" />
-      </label>
-      <label>Moc min [KM]
-        <input type="number" name="power_min" min="0" step="10" />
-      </label>
+<div class="assistant-container">
+    <div class="welcome-section">
+        <h1>🚗 Asystent Samochodowy</h1>
+        <p class="subtitle">Pozwól mi pomóc Ci znaleźć idealny samochód poprzez proste pytania</p>
     </div>
+    
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="message assistant">
+                <div class="avatar">🤖</div>
+                <div class="content">
+                    <p>Cześć! 👋 Jestem Twoim osobistym asystentem samochodowym.</p>
+                    <p>Pomogę Ci znaleźć idealny samochód, zadając kilka prostych pytań o Twoje potrzeby i preferencje.</p>
+                    <p>Nie musisz znać się na samochodach - ja się zajmę szczegółami technicznymi!</p>
+                    <button class="start-button" onclick="startChat()">
+                        🚀 Zacznijmy poszukiwania!
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="typing" id="typing" style="display: none;">
+            <div class="avatar">🤖</div>
+            <div class="content">
+                <span>Asystent pisze</span>
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="Wpisz swoją odpowiedź..." disabled>
+                <button class="send-button" id="sendButton" onclick="sendMessage()" disabled>
+                    <span>Wyślij</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="alternative-options">
+        <div class="divider">
+            <span>lub</span>
+        </div>
+        <a href="/advanced" class="advanced-link">
+            <span>🔧</span>
+            <div>
+                <strong>Wyszukiwanie zaawansowane</strong>
+                <p>Jeśli znasz się na samochodach i chcesz samodzielnie wybrać kryteria</p>
+            </div>
+        </a>
+    </div>
+</div>
 
-<fieldset class="weights">
-  <legend>Co jest dla Ciebie najważniejsze?</legend>
-  <p>Suwaki 0–10. Suma nie musi być równa 10 – serwer je znormalizuje i (wewnętrznie) mocno wzmocni.</p>
+<style>
+.assistant-container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
 
-  <div class="weights-grid">
-    <label class="weight">
-      <span>Cena (<output data-for="w_price"></output>)</span>
-      <input type="range" name="w_price" min="0" max="10" step="1" value="{{ w_price }}">
-    </label>
-    <label class="weight">
-      <span>Przebieg (<output data-for="w_mileage"></output>)</span>
-      <input type="range" name="w_mileage" min="0" max="10" step="1" value="{{ w_mileage }}">
-    </label>
-    <label class="weight">
-      <span>Rok (<output data-for="w_year"></output>)</span>
-      <input type="range" name="w_year" min="0" max="10" step="1" value="{{ w_year }}">
-    </label>
-    <label class="weight">
-      <span>Moc (<output data-for="w_power"></output>)</span>
-      <input type="range" name="w_power" min="0" max="10" step="1" value="{{ w_power }}">
-    </label>
-  </div>
-</fieldset>
+.welcome-section {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    text-align: center;
+    padding: 40px 30px;
+}
+
+.welcome-section h1 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    font-weight: 700;
+}
+
+.subtitle {
+    font-size: 1.2rem;
+    opacity: 0.95;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.chat-container {
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+}
+
+.messages {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    max-height: 600px;
+    background: #f8f9fa;
+}
+
+.message {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+    animation: slideIn 0.4s ease-out;
+}
+
+.message.user {
+    flex-direction: row-reverse;
+}
+
+.avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.message.assistant .avatar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.message.user .avatar {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.content {
+    flex: 1;
+    max-width: 75%;
+}
+
+.message.assistant .content {
+    background: white;
+    padding: 20px;
+    border-radius: 20px 20px 20px 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-left: 4px solid #4facfe;
+}
+
+.message.user .content {
+    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 20px 20px 8px 20px;
+    text-align: right;
+}
+
+.content p {
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+.content p:last-child {
+    margin-bottom: 0;
+}
+
+.start-button, .search-button {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ffa500 100%);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    width: 100%;
+}
+
+.start-button:hover, .search-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+.options {
+    margin-top: 20px;
+}
+
+.option-button {
+    display: block;
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 15px 20px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    font-size: 15px;
+    position: relative;
+    overflow: hidden;
+}
+
+.option-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(76, 175, 80, 0.1), transparent);
+    transition: left 0.5s;
+}
+
+.option-button:hover::before {
+    left: 100%;
+}
+
+.option-button:hover {
+    border-color: #4caf50;
+    background: #f8fff8;
+    transform: translateX(8px);
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.2);
+}
+
+.typing {
+    display: flex;
+    gap: 15px;
+    padding: 0 30px 20px;
+    align-items: center;
+}
+
+.typing .content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-style: italic;
+    color: #666;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background: #4facfe;
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite both;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+.input-area {
+    padding: 25px 30px;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+}
+
+.input-container {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+#messageInput {
+    flex: 1;
+    padding: 15px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 25px;
+    outline: none;
+    font-size: 16px;
+    background: #f8f9fa;
+    transition: all 0.2s ease;
+}
+
+#messageInput:focus {
+    border-color: #4facfe;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+}
+
+.send-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 15px 25px;
+    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+.send-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.send-button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.alternative-options {
+    padding: 30px;
+    background: #f8f9fa;
+}
+
+.divider {
+    text-align: center;
+    margin-bottom: 25px;
+    position: relative;
+}
+
+.divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #e0e0e0;
+    z-index: 1;
+}
+
+.divider span {
+    background: #f8f9fa;
+    color: #666;
+    padding: 0 20px;
+    position: relative;
+    z-index: 2;
+}
+
+.advanced-link {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 25px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 15px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s ease;
+}
+
+.advanced-link:hover {
+    border-color: #4facfe;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.advanced-link span {
+    font-size: 2rem;
+}
+
+.advanced-link strong {
+    color: #333;
+    font-size: 1.1rem;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.advanced-link p {
+    color: #666;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.results-container {
+    max-height: 500px;
+    overflow-y: auto;
+    background: white;
+    border-radius: 15px;
+    margin-top: 20px;
+    border: 1px solid #e0e0e0;
+}
+
+.car-card {
+    border-bottom: 1px solid #f0f0f0;
+    padding: 20px;
+    transition: all 0.2s ease;
+}
+
+.car-card:last-child {
+    border-bottom: none;
+}
+
+.car-card:hover {
+    background: #f8f9fa;
+    transform: translateX(5px);
+}
+
+.car-title {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    font-size: 1.1rem;
+    line-height: 1.3;
+}
+
+.car-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+.car-detail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.car-detail strong {
+    color: #333;
+}
+
+.car-price {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #4caf50;
+    margin-top: 10px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+@media (max-width: 768px) {
+    .welcome-section {
+        padding: 30px 20px;
+    }
+    
+    .welcome-section h1 {
+        font-size: 2rem;
+    }
+    
+    .messages {
+        padding: 20px;
+    }
+    
+    .content {
+        max-width: 85%;
+    }
+    
+    .input-area {
+        padding: 20px;
+    }
+    
+    .alternative-options {
+        padding: 20px;
+    }
+    
+    .advanced-link {
+        flex-direction: column;
+        text-align: center;
+        gap: 15px;
+    }
+    
+    .car-details {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+}
+</style>
 
 <script>
-  // Podgląd liczby przy nazwach
-  document.querySelectorAll('.weights input[type="range"]').forEach(r => {
-    const out = document.querySelector(`output[data-for="${r.name}"]`);
-    if (!out) return;
-    const upd = () => { out.textContent = r.value; };
-    r.addEventListener('input', upd);
-    upd();
-  });
-</script>
+let sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+let chatStarted = false;
 
+async function startChat() {
+    showTyping();
+    chatStarted = true;
+    
+    try {
+        const response = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                session_id: sessionId,
+                action: 'start'
+            })
+        });
+        
+        const data = await response.json();
+        hideTyping();
+        addMessage(data.message, 'assistant', data.options, data.show_search);
+        enableInput();
+        
+    } catch (error) {
+        hideTyping();
+        addMessage('Przepraszam, wystąpił błąd. Spróbuj ponownie.', 'assistant');
+    }
+}
 
-    <div class="actions">
-      <button type="submit">Szukaj</button>
-    </div>
-  </form>
+async function sendMessage(optionSelected = null) {
+    const input = document.getElementById('messageInput');
+    const message = optionSelected || input.value.trim();
+    
+    if (!message && !optionSelected) return;
+    
+    if (!optionSelected) {
+        addMessage(message, 'user');
+        input.value = '';
+    }
+    
+    disableInput();
+    showTyping();
+    
+    try {
+        const response = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                session_id: sessionId,
+                message: message,
+                option_selected: optionSelected,
+                action: 'chat'
+            })
+        });
+        
+        const data = await response.json();
+        hideTyping();
+        
+        if (data.results) {
+            displayResults(data);
+        } else {
+            addMessage(data.message, 'assistant', data.options, data.show_search);
+        }
+        
+        enableInput();
+        
+    } catch (error) {
+        hideTyping();
+        addMessage('Przepraszam, wystąpił błąd. Spróbuj ponownie.', 'assistant');
+        enableInput();
+    }
+}
 
-  <script>
-    // Podgląd liczby tuż obok nazwy kategorii (w nawiasie)
-    document.querySelectorAll('.weights input[type="range"]').forEach(r => {
-      const out = document.querySelector(`output[data-for="${r.name}"]`);
-      if (!out) return;
-      const upd = () => { out.textContent = r.value; };
-      r.addEventListener('input', upd);
-      upd();
+function addMessage(message, sender, options = null, showSearch = false) {
+    const messagesContainer = document.getElementById('messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${sender}`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = sender === 'assistant' ? '🤖' : '👤';
+    
+    const content = document.createElement('div');
+    content.className = 'content';
+    
+    // Convert line breaks to paragraphs
+    const paragraphs = message.split('\n\n');
+    paragraphs.forEach(paragraph => {
+        if (paragraph.trim()) {
+            const p = document.createElement('p');
+            p.innerHTML = paragraph.replace(/\n/g, '<br>');
+            content.appendChild(p);
+        }
     });
-  </script>
+    
+    if (options) {
+        const optionsDiv = document.createElement('div');
+        optionsDiv.className = 'options';
+        
+        options.forEach(option => {
+            const button = document.createElement('button');
+            button.className = 'option-button';
+            button.textContent = option;
+            button.onclick = () => {
+                // Add user message
+                addMessage(option, 'user');
+                // Remove all option buttons
+                document.querySelectorAll('.option-button').forEach(btn => btn.remove());
+                sendMessage(option);
+            };
+            optionsDiv.appendChild(button);
+        });
+        
+        content.appendChild(optionsDiv);
+    }
+    
+    if (showSearch) {
+        const searchButton = document.createElement('button');
+        searchButton.className = 'search-button';
+        searchButton.innerHTML = '🔍 Szukaj samochodów';
+        searchButton.onclick = () => {
+            addMessage('Szukaj samochodów', 'user');
+            document.querySelectorAll('.option-button, .search-button').forEach(btn => btn.remove());
+            sendMessage('search');
+        };
+        content.appendChild(searchButton);
+    }
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function displayResults(data) {
+    const messagesContainer = document.getElementById('messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = '🤖';
+    
+    const content = document.createElement('div');
+    content.className = 'content';
+    
+    const message = document.createElement('p');
+    message.textContent = data.message;
+    content.appendChild(message);
+    
+    if (data.preferences_summary) {
+        const summary = document.createElement('div');
+        summary.innerHTML = '<p><strong>Twoje preferencje:</strong></p><p>' + 
+                          data.preferences_summary.replace(/\n/g, '<br>') + '</p>';
+        content.appendChild(summary);
+    }
+    
+    const resultsContainer = document.createElement('div');
+    resultsContainer.className = 'results-container';
+    
+    data.results.forEach(car => {
+        const carCard = document.createElement('div');
+        carCard.className = 'car-card';
+        
+        const title = document.createElement('div');
+        title.className = 'car-title';
+        title.textContent = car.title || 'Bez nazwy';
+        
+        const details = document.createElement('div');
+        details.className = 'car-details';
+        
+        if (car.year) {
+            const yearDetail = document.createElement('div');
+            yearDetail.className = 'car-detail';
+            yearDetail.innerHTML = `<strong>Rok:</strong> ${car.year}`;
+            details.appendChild(yearDetail);
+        }
+        
+        if (car.mileage) {
+            const mileageDetail = document.createElement('div');
+            mileageDetail.className = 'car-detail';
+            mileageDetail.innerHTML = `<strong>Przebieg:</strong> ${parseInt(car.mileage).toLocaleString('pl-PL')} km`;
+            details.appendChild(mileageDetail);
+        }
+        
+        if (car.fuel_type) {
+            const fuelDetail = document.createElement('div');
+            fuelDetail.className = 'car-detail';
+            fuelDetail.innerHTML = `<strong>Paliwo:</strong> ${car.fuel_type}`;
+            details.appendChild(fuelDetail);
+        }
+        
+        if (car.power_hp) {
+            const powerDetail = document.createElement('div');
+            powerDetail.className = 'car-detail';
+            powerDetail.innerHTML = `<strong>Moc:</strong> ${car.power_hp} KM`;
+            details.appendChild(powerDetail);
+        }
+        
+        const price = document.createElement('div');
+        price.className = 'car-price';
+        if (car.price) {
+            price.textContent = `${parseInt(car.price).toLocaleString('pl-PL')} PLN`;
+        } else {
+            price.textContent = 'Cena do uzgodnienia';
+            price.style.color = '#666';
+        }
+        
+        carCard.appendChild(title);
+        carCard.appendChild(details);
+        carCard.appendChild(price);
+        
+        if (car.link) {
+            carCard.style.cursor = 'pointer';
+            carCard.onclick = () => window.open(car.link, '_blank');
+            carCard.title = 'Kliknij aby zobaczyć ogłoszenie';
+        }
+        
+        resultsContainer.appendChild(carCard);
+    });
+    
+    content.appendChild(resultsContainer);
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function showTyping() {
+    document.getElementById('typing').style.display = 'flex';
+    const messagesContainer = document.getElementById('messages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function hideTyping() {
+    document.getElementById('typing').style.display = 'none';
+}
+
+function enableInput() {
+    document.getElementById('messageInput').disabled = false;
+    document.getElementById('sendButton').disabled = false;
+}
+
+function disableInput() {
+    document.getElementById('messageInput').disabled = true;
+    document.getElementById('sendButton').disabled = true;
+}
+
+// Enter key support
+document.getElementById('messageInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+</script>
 {% endblock %}

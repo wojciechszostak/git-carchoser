@@ -1,0 +1,569 @@
+<!-- app/templates/assistant_index.html -->
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Assistant - Find Your Perfect Car</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 800px;
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 20px 20px 0 0;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+        
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 15px;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        .message.assistant {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            margin-right: auto;
+        }
+        
+        .message.user {
+            background: #4caf50;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .options {
+            margin-top: 15px;
+        }
+        
+        .option-button {
+            display: block;
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 12px 16px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+        
+        .option-button:hover {
+            border-color: #2196f3;
+            background: #f0f8ff;
+            transform: translateX(5px);
+        }
+        
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        #messageInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            outline: none;
+            font-size: 16px;
+        }
+        
+        #messageInput:focus {
+            border-color: #2196f3;
+        }
+        
+        .send-button {
+            padding: 12px 24px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s ease;
+        }
+        
+        .send-button:hover:not(:disabled) {
+            background: #45a049;
+        }
+        
+        .send-button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .typing {
+            display: none;
+            align-items: center;
+            gap: 5px;
+            color: #666;
+            font-style: italic;
+            padding: 10px 0;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 3px;
+        }
+        
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: #666;
+            border-radius: 50%;
+            animation: bounce 1.4s ease-in-out infinite both;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .search-button {
+            background: linear-gradient(135deg, #ff6b6b, #ffa500);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        .search-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+        
+        .advanced-link {
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+        }
+        
+        .advanced-link a {
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .advanced-link a:hover {
+            color: #2196f3;
+        }
+        
+        .results-container {
+            max-height: 400px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        
+        .car-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.2s ease;
+        }
+        
+        .car-card:hover {
+            border-color: #2196f3;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .car-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+        
+        .car-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .car-detail {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .car-price {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #4caf50;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                width: 95%;
+                margin: 20px;
+                min-height: calc(100vh - 40px);
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .message {
+                max-width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 Car Assistant</h1>
+            <p>Let me help you find the perfect car through simple questions</p>
+        </div>
+        
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message assistant">
+                    <p>Hello! 👋 I'm your personal car assistant. I'll help you find the perfect car by asking simple questions about your needs and preferences.</p>
+                    <p>Ready to get started?</p>
+                    <button class="search-button" onclick="startChat()">
+                        🚀 Let's Find Your Car!
+                    </button>
+                </div>
+            </div>
+            
+            <div class="typing" id="typing">
+                <span>Assistant is typing</span>
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <div class="input-container">
+                    <input type="text" id="messageInput" placeholder="Type your message..." disabled>
+                    <button class="send-button" id="sendButton" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="advanced-link">
+            <a href="/advanced">🔧 Prefer manual search? Try Advanced Search</a>
+        </div>
+    </div>
+    
+    <script>
+        let sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        let chatStarted = false;
+        
+        async function startChat() {
+            showTyping();
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        action: 'start'
+                    })
+                });
+                
+                const data = await response.json();
+                hideTyping();
+                addMessage(data.message, 'assistant', data.options, data.show_search);
+                enableInput();
+                
+            } catch (error) {
+                hideTyping();
+                addMessage('Sorry, an error occurred. Please try again.', 'assistant');
+            }
+        }
+
+        async function sendMessage(optionSelected = null) {
+            const input = document.getElementById('messageInput');
+            const message = optionSelected || input.value.trim();
+            
+            if (!message && !optionSelected) return;
+            
+            if (!optionSelected) {
+                addMessage(message, 'user');
+                input.value = '';
+            }
+            
+            disableInput();
+            showTyping();
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        message: message,
+                        option_selected: optionSelected,
+                        action: 'chat'
+                    })
+                });
+                
+                const data = await response.json();
+                hideTyping();
+                
+                if (data.results) {
+                    displayResults(data);
+                } else {
+                    addMessage(data.message, 'assistant', data.options, data.show_search);
+                }
+                
+                enableInput();
+                
+            } catch (error) {
+                hideTyping();
+                addMessage('Sorry, an error occurred. Please try again.', 'assistant');
+                enableInput();
+            }
+        }
+
+        function addMessage(message, sender, options = null, showSearch = false) {
+            const messagesContainer = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            // Convert line breaks to paragraphs
+            const paragraphs = message.split('\n\n');
+            paragraphs.forEach(paragraph => {
+                if (paragraph.trim()) {
+                    const p = document.createElement('p');
+                    p.innerHTML = paragraph.replace(/\n/g, '<br>');
+                    messageDiv.appendChild(p);
+                }
+            });
+            
+            if (options) {
+                const optionsDiv = document.createElement('div');
+                optionsDiv.className = 'options';
+                
+                options.forEach(option => {
+                    const button = document.createElement('button');
+                    button.className = 'option-button';
+                    button.textContent = option;
+                    button.onclick = () => {
+                        addMessage(option, 'user');
+                        document.querySelectorAll('.option-button').forEach(btn => btn.remove());
+                        sendMessage(option);
+                    };
+                    optionsDiv.appendChild(button);
+                });
+                
+                messageDiv.appendChild(optionsDiv);
+            }
+            
+            if (showSearch) {
+                const searchButton = document.createElement('button');
+                searchButton.className = 'search-button';
+                searchButton.innerHTML = '🔍 Search Cars';
+                searchButton.onclick = () => {
+                    addMessage('Search cars', 'user');
+                    document.querySelectorAll('.option-button, .search-button').forEach(btn => btn.remove());
+                    sendMessage('search');
+                };
+                messageDiv.appendChild(searchButton);
+            }
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function displayResults(data) {
+            const messagesContainer = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            
+            const message = document.createElement('p');
+            message.textContent = data.message;
+            messageDiv.appendChild(message);
+            
+            if (data.preferences_summary) {
+                const summary = document.createElement('div');
+                summary.innerHTML = '<p><strong>Your preferences:</strong></p><p>' + 
+                                  data.preferences_summary.replace(/\n/g, '<br>') + '</p>';
+                messageDiv.appendChild(summary);
+            }
+            
+            const resultsContainer = document.createElement('div');
+            resultsContainer.className = 'results-container';
+            
+            data.results.forEach(car => {
+                const carCard = document.createElement('div');
+                carCard.className = 'car-card';
+                
+                const title = document.createElement('div');
+                title.className = 'car-title';
+                title.textContent = car.title || 'No title';
+                
+                const details = document.createElement('div');
+                details.className = 'car-details';
+                
+                if (car.year) {
+                    const yearDetail = document.createElement('div');
+                    yearDetail.className = 'car-detail';
+                    yearDetail.innerHTML = `<strong>Year:</strong> ${car.year}`;
+                    details.appendChild(yearDetail);
+                }
+                
+                if (car.mileage) {
+                    const mileageDetail = document.createElement('div');
+                    mileageDetail.className = 'car-detail';
+                    mileageDetail.innerHTML = `<strong>Mileage:</strong> ${parseInt(car.mileage).toLocaleString()} km`;
+                    details.appendChild(mileageDetail);
+                }
+                
+                if (car.fuel_type) {
+                    const fuelDetail = document.createElement('div');
+                    fuelDetail.className = 'car-detail';
+                    fuelDetail.innerHTML = `<strong>Fuel:</strong> ${car.fuel_type}`;
+                    details.appendChild(fuelDetail);
+                }
+                
+                if (car.power_hp) {
+                    const powerDetail = document.createElement('div');
+                    powerDetail.className = 'car-detail';
+                    powerDetail.innerHTML = `<strong>Power:</strong> ${car.power_hp} HP`;
+                    details.appendChild(powerDetail);
+                }
+                
+                const price = document.createElement('div');
+                price.className = 'car-price';
+                if (car.price) {
+                    price.textContent = `${parseInt(car.price).toLocaleString()} PLN`;
+                } else {
+                    price.textContent = 'Price on request';
+                    price.style.color = '#666';
+                }
+                
+                carCard.appendChild(title);
+                carCard.appendChild(details);
+                carCard.appendChild(price);
+                
+                if (car.link) {
+                    carCard.style.cursor = 'pointer';
+                    carCard.onclick = () => window.open(car.link, '_blank');
+                    carCard.title = 'Click to view listing';
+                }
+                
+                resultsContainer.appendChild(carCard);
+            });
+            
+            messageDiv.appendChild(resultsContainer);
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showTyping() {
+            document.getElementById('typing').style.display = 'flex';
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            document.getElementById('typing').style.display = 'none';
+        }
+
+        function enableInput() {
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendButton').disabled = false;
+        }
+
+        function disableInput() {
+            document.getElementById('messageInput').disabled = true;
+            document.getElementById('sendButton').disabled = true;
+        }
+
+        // Enter key support
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

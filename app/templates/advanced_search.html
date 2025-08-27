@@ -1,0 +1,277 @@
+<!-- app/templates/advanced_search.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="advanced-search-container">
+    <div class="header-section">
+        <h1>🔧 Wyszukiwanie Zaawansowane</h1>
+        <p>Dla użytkowników, którzy znają się na samochodach i chcą samodzielnie wybrać kryteria</p>
+        <a href="/" class="back-to-assistant">
+            ← Wróć do Asystenta AI
+        </a>
+    </div>
+    
+    <form method="post" action="/advanced_results" class="advanced-form">
+        <div class="form-section">
+            <h3>🚗 Podstawowe filtry</h3>
+            <div class="form-grid">
+                <label>
+                    <span>Rodzaj paliwa</span>
+                    <select name="fuel_type">
+                        <option value="">(dowolny)</option>
+                        {% for x in fuel_types %}
+                            <option value="{{ x }}">{{ x }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                
+                <label>
+                    <span>Skrzynia biegów</span>
+                    <select name="gearbox">
+                        <option value="">(dowolna)</option>
+                        {% for x in gearboxes %}
+                            <option value="{{ x }}">{{ x }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                
+                <label>
+                    <span>Województwo</span>
+                    <select name="voivodeship">
+                        <option value="">(dowolne)</option>
+                        {% for x in voivodeships %}
+                            <option value="{{ x }}">{{ x }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h3>💰 Cena</h3>
+            <div class="form-grid-2">
+                <label>
+                    <span>Cena minimalna (PLN)</span>
+                    <input type="number" name="price_min" min="0" step="1000" placeholder="np. 20000">
+                </label>
+                <label>
+                    <span>Cena maksymalna (PLN)</span>
+                    <input type="number" name="price_max" min="0" step="1000" placeholder="np. 50000">
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h3>📅 Rok produkcji</h3>
+            <div class="form-grid-2">
+                <label>
+                    <span>Rok od</span>
+                    <input type="number" name="year_min" min="1950" max="2100" placeholder="np. 2015">
+                </label>
+                <label>
+                    <span>Rok do</span>
+                    <input type="number" name="year_max" min="1950" max="2100" placeholder="np. 2025">
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h3>🛣️ Przebieg i moc</h3>
+            <div class="form-grid-2">
+                <label>
+                    <span>Maksymalny przebieg (km)</span>
+                    <input type="number" name="mileage_max" min="0" step="1000" placeholder="np. 150000">
+                </label>
+                <label>
+                    <span>Minimalna moc (KM)</span>
+                    <input type="number" name="power_min" min="0" step="10" placeholder="np. 100">
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="search-button">
+                <span>🔍</span>
+                Szukaj samochodów
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+.advanced-search-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.header-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 40px 30px;
+    text-align: center;
+    position: relative;
+}
+
+.header-section h1 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    font-weight: 700;
+}
+
+.header-section p {
+    font-size: 1.2rem;
+    opacity: 0.95;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.back-to-assistant {
+    position: absolute;
+    top: 20px;
+    left: 30px;
+    color: white;
+    text-decoration: none;
+    background: rgba(255,255,255,0.2);
+    padding: 10px 20px;
+    border-radius: 25px;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+}
+
+.back-to-assistant:hover {
+    background: rgba(255,255,255,0.3);
+    transform: translateX(-3px);
+}
+
+.advanced-form {
+    padding: 40px;
+}
+
+.form-section {
+    margin-bottom: 40px;
+}
+
+.form-section h3 {
+    color: #333;
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 25px;
+}
+
+.form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 25px;
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+label span {
+    font-weight: 600;
+    color: #555;
+    font-size: 14px;
+}
+
+select, input[type="number"] {
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 16px;
+    background: white;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+select:focus, input[type="number"]:focus {
+    border-color: #4facfe;
+    box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+}
+
+select:hover, input[type="number"]:hover {
+    border-color: #ccc;
+}
+
+.form-actions {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.search-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    border: none;
+    padding: 18px 40px;
+    border-radius: 30px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(79, 172, 254, 0.3);
+}
+
+.search-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(79, 172, 254, 0.4);
+}
+
+.search-button span {
+    font-size: 1.2em;
+}
+
+@media (max-width: 768px) {
+    .advanced-search-container {
+        margin: 20px;
+        width: calc(100% - 40px);
+    }
+    
+    .header-section {
+        padding: 30px 20px;
+    }
+    
+    .header-section h1 {
+        font-size: 2rem;
+    }
+    
+    .back-to-assistant {
+        position: static;
+        display: inline-block;
+        margin-bottom: 20px;
+    }
+    
+    .advanced-form {
+        padding: 30px 20px;
+    }
+    
+    .form-grid, .form-grid-2 {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .form-section h3 {
+        font-size: 1.2rem;
+    }
+}
+</style>
+{% endblock %}

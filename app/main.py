@@ -1,28 +1,25 @@
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from typing import Optional, Iterable, List, Dict, Any
+from typing import Optional, List, Dict, Any
+import json
+import re
 
 from .db import init_db, seed_from_csv
 from .repo import get_distinct_values, search
 
-app = FastAPI(title="Car Chooser – wagi silne + deduplikacja + dynamiczna normalizacja")
+app = FastAPI(title="Car Assistant - Find Your Perfect Car")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 CURRENT_YEAR = 2025
 
-# Silny wpływ wag i dopasowań (na stałe)
-INTENSITY = 4
-ALPHA = 1 + 0.5 * INTENSITY  # 3.0  -> wzmacnia wagi
-TAU   = 1 + 0.5 * INTENSITY  # 3.0  -> wyostrza dopasowanie
-
 
 @app.on_event("startup")
 async def startup_event():
     init_db()
-    seed_from_csv(limit=100000)  # zmień na None dla pełnego importu
+    seed_from_csv(limit=100000)
 
 
 def _to_float(x: Optional[str]) -> Optional[float]:
@@ -49,159 +46,379 @@ def _to_int(x: Optional[str]) -> Optional[int]:
         return None
 
 
-def _to_weight_small(x: Optional[str]) -> float:
-    """Waga 0..10 (mniejsza skala)."""
-    try:
-        val = float((x or "").replace(",", ".").strip())
-        return max(0.0, min(10.0, val))
-    except Exception:
-        return 0.0
-
-
-def _norm01(x: float) -> float:
-    try:
-        return max(0.0, min(1.0, float(x)))
-    except Exception:
-        return 0.0
-
-
-def _apply_intensity_fixed(weights: Dict[str, float]) -> Dict[str, float]:
-    """
-    Silnie wzmacnia względny wpływ wag:
-      w' = (w^ALPHA) / sum(w^ALPHA),  gdzie ALPHA = 3.0
-    """
-    s = sum(weights.values()) or 1.0
-    w = {k: v / s for k, v in weights.items()}
-    powered = {k: (v ** ALPHA) for k, v in w.items()}
-    z = sum(powered.values()) or 1.0
-    return {k: powered[k] / z for k in powered}
-
-
-# ---------- NOWOŚĆ: dynamiczna normalizacja po zbiorze kandydatów ----------
-
-def _prep_scalers(candidates: Iterable) -> Dict[str, Dict[str, float]]:
-    """
-    Oblicza min/max dla cech w aktualnym zbiorze kandydatów.
-    Dzięki temu wagi działają mocno nawet bez limitów użytkownika.
-    """
-    vals = {"price": [], "mileage": [], "year": [], "power_hp": []}
-    for c in candidates:
-        if c.price is not None:    vals["price"].append(float(c.price))
-        if c.mileage is not None:  vals["mileage"].append(float(c.mileage))
-        if c.year is not None:     vals["year"].append(int(c.year))
-        if c.power_hp is not None: vals["power_hp"].append(float(c.power_hp))
-
-    def mm(vs: List[float]):
-        if not vs:
-            return {"min": None, "max": None, "rng": None}
-        mn, mx = min(vs), max(vs)
-        rng = (mx - mn) if (mx is not None and mn is not None) else None
-        if rng is not None and rng <= 0:
-            rng = None
-        return {"min": mn, "max": mx, "rng": rng}
-
-    return {k: mm(v) for k, v in vals.items()}
-
-
-def _minmax_score(value: Optional[float], cal: Dict[str, float], reverse: bool) -> float:
-    """
-    Min–max w obrębie kandydatów.
-    reverse=True  -> niższa wartość lepsza (cena, przebieg)
-    reverse=False -> wyższa wartość lepsza (rok, moc)
-    W przypadku braku zróżnicowania (rng=None) zwraca 0.5 (neutralnie).
-    """
-    if value is None or cal["rng"] is None:
-        return 0.5
-    v = float(value)
-    mn, mx, rng = cal["min"], cal["max"], cal["rng"]
-    if reverse:
-        # Niski przebieg / niska cena -> bliżej 1
-        return _norm01((mx - v) / rng)
-    else:
-        # Wyższy rok / większa moc -> bliżej 1
-        return _norm01((v - mn) / rng)
-
-
-def _dedup_listings(candidates: Iterable):
-    """
-    Usuwa duplikaty:
-    1) po linku (case-insensitive, bez trailing slash),
-    2) gdy brak linku – po (title_norm, int(price), int(year), int(mileage)).
-    """
-    seen = set()
+def _dedup_listings(candidates):
+    """Remove true duplicates based ONLY on normalized link.
+    Listings without a link are kept (no dedup), to avoid false merges."""
+    seen_links = set()
     out = []
     for c in candidates:
-        if c.link:
-            key = str(c.link).strip().rstrip("/").lower()
-        else:
-            title_norm = (c.title or "").strip().lower()
-            price_i = int(c.price) if c.price is not None else None
-            year_i = int(c.year) if c.year is not None else None
-            mileage_i = int(c.mileage) if c.mileage is not None else None
-            key = ("NO_LINK", title_norm, price_i, year_i, mileage_i)
-        if key in seen:
-            continue
-        seen.add(key)
+        lk = (str(c.link).strip().rstrip("/").lower()) if getattr(c, "link", None) else None
+        if lk:
+            if lk in seen_links:
+                continue
+            seen_links.add(lk)
         out.append(c)
     return out
 
 
-def _score_car(car, weights_strong: Dict[str, float], scalers: Dict[str, Dict[str, float]]) -> float:
-    """
-    Punktacja 0..1 (wyżej = lepiej), liczone per-zapytanie:
-      - najpierw min–max po aktualnych kandydatach,
-      - potem wyostrzenie składowych do potęgi TAU,
-      - na końcu wagi wzmocnione (ALPHA).
-    """
-    s_price   = _minmax_score(car.price,   scalers["price"],   reverse=True)   # niższa cena lepsza
-    s_mileage = _minmax_score(car.mileage, scalers["mileage"], reverse=True)   # niższy przebieg lepszy
-    s_year    = _minmax_score(car.year,    scalers["year"],    reverse=False)  # nowszy lepszy
-    s_power   = _minmax_score(car.power_hp,scalers["power_hp"],reverse=False)  # mocniejszy lepszy
+class CarAssistant:
+    """AI Assistant to help users find cars through conversation"""
+    
+    def __init__(self):
+        self.conversation_states = {}
+        
+    def start_conversation(self, session_id: str) -> Dict[str, Any]:
+        """Initialize a new conversation"""
+        self.conversation_states[session_id] = {
+            'step': 'welcome',
+            'preferences': {},
+            'context': {}
+        }
+        return {
+            'message': "Hi! I'm your car assistant. I'll help you find the perfect car by asking a few simple questions. Let's start!\n\nWhat's your main use for this car?",
+            'options': [
+                "Daily commuting to work",
+                "Family trips and weekend outings", 
+                "City driving and parking",
+                "Long highway drives",
+                "I'm not sure yet"
+            ],
+            'step': 'usage'
+        }
+    
+    def process_response(self, session_id: str, response: str, option_selected: Optional[str] = None) -> Dict[str, Any]:
+        """Process user response and return next question"""
+        if session_id not in self.conversation_states:
+            return self.start_conversation(session_id)
+            
+        state = self.conversation_states[session_id]
+        
+        if state['step'] == 'usage' or state['step'] == 'welcome':
+            return self._process_usage(session_id, option_selected or response)
+        elif state['step'] == 'budget':
+            return self._process_budget(session_id, option_selected or response)
+        elif state['step'] == 'size':
+            return self._process_size(session_id, option_selected or response)
+        elif state['step'] == 'fuel':
+            return self._process_fuel(session_id, option_selected or response)
+        elif state['step'] == 'age':
+            return self._process_age(session_id, option_selected or response)
+        elif state['step'] == 'final_preferences':
+            return self._process_final(session_id, response)
+        
+        return {'message': 'Sorry, something went wrong. Let me start over.', 'restart': True}
+    
+    def _process_usage(self, session_id: str, response: str) -> Dict[str, Any]:
+        state = self.conversation_states[session_id]
+        
+        usage_mapping = {
+            "Daily commuting to work": {"context": "commuter", "priorities": ["fuel_efficiency", "reliability"]},
+            "Family trips and weekend outings": {"context": "family", "priorities": ["space", "safety", "comfort"]},
+            "City driving and parking": {"context": "city", "priorities": ["compact", "maneuverability"]},
+            "Long highway drives": {"context": "highway", "priorities": ["comfort", "power", "fuel_efficiency"]},
+            "I'm not sure yet": {"context": "general", "priorities": ["versatility"]}
+        }
+        
+        state['preferences']['usage'] = response
+        if response in usage_mapping:
+            state['context'].update(usage_mapping[response])
+        
+        state['step'] = 'budget'
+        
+        return {
+            'message': "Great! Now, what's your budget range? Don't worry, we can find good options in any range.",
+            'options': [
+                "Under 20,000 PLN - Looking for a good deal",
+                "20,000 - 50,000 PLN - Moderate budget",
+                "50,000 - 100,000 PLN - Good budget for quality",
+                "Over 100,000 PLN - Premium options",
+                "I'm flexible with budget"
+            ],
+            'step': 'budget'
+        }
+    
+    def _process_budget(self, session_id: str, response: str) -> Dict[str, Any]:
+        state = self.conversation_states[session_id]
+        
+        budget_mapping = {
+            "Under 20,000 PLN - Looking for a good deal": {"max": 20000, "focus": "value"},
+            "20,000 - 50,000 PLN - Moderate budget": {"max": 50000, "focus": "balance"},
+            "50,000 - 100,000 PLN - Good budget for quality": {"max": 100000, "focus": "quality"},
+            "Over 100,000 PLN - Premium options": {"min": 100000, "focus": "premium"},
+            "I'm flexible with budget": {"focus": "flexible"}
+        }
+        
+        state['preferences']['budget'] = response
+        if response in budget_mapping:
+            state['context']['budget'] = budget_mapping[response]
+        
+        state['step'] = 'size'
+        
+        # Customize message based on usage
+        if state['context'].get('context') == 'family':
+            size_message = "For family use, you'll probably want something with good space. How many people do you usually need to seat?"
+        else:
+            size_message = "What size car feels right for you?"
+        
+        return {
+            'message': size_message,
+            'options': [
+                "Small car - Easy to park, economical",
+                "Medium car - Good balance of space and efficiency", 
+                "Large car - Maximum space and comfort",
+                "SUV - Higher driving position, versatile",
+                "I'm not sure about size"
+            ],
+            'step': 'size'
+        }
+    
+    def _process_size(self, session_id: str, response: str) -> Dict[str, Any]:
+        state = self.conversation_states[session_id]
+        state['preferences']['size'] = response
+        state['step'] = 'fuel'
+        
+        return {
+            'message': "What about fuel type? Each has its benefits:",
+            'options': [
+                "Petrol - Good performance, widely available",
+                "Diesel - Better fuel economy for long drives",
+                "Hybrid - Best of both worlds, eco-friendly",
+                "Electric - Zero emissions, low running costs",
+                "I don't have a strong preference"
+            ],
+            'step': 'fuel'
+        }
+    
+    def _process_fuel(self, session_id: str, response: str) -> Dict[str, Any]:
+        state = self.conversation_states[session_id]
+        state['preferences']['fuel'] = response
+        state['step'] = 'age'
+        
+        return {
+            'message': "Finally, how do you feel about the car's age? Newer isn't always necessary!",
+            'options': [
+                "I want something quite new (2020 or newer)",
+                "A few years old is fine (2015-2020)",
+                "Older cars are okay if they're reliable (2010+)",
+                "Age doesn't matter, just needs to work well",
+                "Let me see all options"
+            ],
+            'step': 'age'
+        }
+    
+    def _process_age(self, session_id: str, response: str) -> Dict[str, Any]:
+        state = self.conversation_states[session_id]
+        state['preferences']['age'] = response
+        state['step'] = 'final_preferences'
+        
+        # Generate summary
+        summary = self._generate_summary(state['preferences'])
+        
+        return {
+            'message': f"Perfect! Based on our conversation:\n\n{summary}\n\nIs there anything specific you'd like to add or change? For example:\n- Automatic or manual transmission preference\n- Specific brands you like or want to avoid\n- Any other requirements\n\nOr just say 'search' to find your cars!",
+            'step': 'final_preferences',
+            'show_search': True
+        }
+    
+    def _process_final(self, session_id: str, response: str) -> Dict[str, Any]:
+        state = self.conversation_states[session_id]
+        
+        if response.lower().strip() in ['search', 'find cars', 'show results', 'go']:
+            return self._generate_search_results(session_id)
+        
+        # Process additional preferences
+        state['preferences']['additional'] = response
+        return {
+            'message': f"Got it! I've noted: {response}\n\nReady to search for your perfect car?",
+            'show_search': True,
+            'step': 'ready_to_search'
+        }
+    
+    def _generate_summary(self, preferences: Dict[str, str]) -> str:
+        """Generate a human-readable summary of preferences"""
+        summary = []
+        if 'usage' in preferences:
+            summary.append(f"• Usage: {preferences['usage']}")
+        if 'budget' in preferences:
+            summary.append(f"• Budget: {preferences['budget']}")
+        if 'size' in preferences:
+            summary.append(f"• Size: {preferences['size']}")
+        if 'fuel' in preferences:
+            summary.append(f"• Fuel: {preferences['fuel']}")
+        if 'age' in preferences:
+            summary.append(f"• Age preference: {preferences['age']}")
+        
+        return "\n".join(summary)
+    
+    def _generate_search_results(self, session_id: str) -> Dict[str, Any]:
+        """Convert preferences to search parameters and get results"""
+        if session_id not in self.conversation_states:
+            return {'error': 'Session not found'}
+            
+        state = self.conversation_states[session_id]
+        search_params = self._preferences_to_search_params(state['preferences'])
+        
+        # Get candidates from database
+        candidates = search(**search_params)
+        candidates = _dedup_listings(candidates)
+        
+        # Simple scoring based on preferences context
+        scored_candidates = self._score_by_preferences(candidates, state)
+        
+        return {
+            'message': f"Great! I found {len(scored_candidates)} cars that match your preferences. Here are the best matches:",
+            'results': scored_candidates[:20],  # Top 20 results
+            'search_params': search_params,
+            'preferences_summary': self._generate_summary(state['preferences'])
+        }
+    
+    def _preferences_to_search_params(self, preferences: Dict[str, str]) -> Dict[str, Any]:
+        """Convert user preferences to database search parameters"""
+        params = {}
+        
+        # Budget mapping
+        if 'budget' in preferences:
+            budget = preferences['budget']
+            if "Under 20,000" in budget:
+                params['price_max'] = 20000.0
+            elif "20,000 - 50,000" in budget:
+                params['price_min'] = 20000.0
+                params['price_max'] = 50000.0
+            elif "50,000 - 100,000" in budget:
+                params['price_min'] = 50000.0
+                params['price_max'] = 100000.0
+            elif "Over 100,000" in budget:
+                params['price_min'] = 100000.0
+        
+        # Fuel type mapping
+        if 'fuel' in preferences:
+            fuel = preferences['fuel'].lower()
+            if 'petrol' in fuel:
+                params['fuel_type'] = 'petrol'
+            elif 'diesel' in fuel:
+                params['fuel_type'] = 'diesel'
+            elif 'hybrid' in fuel:
+                params['fuel_type'] = 'hybrid'
+            elif 'electric' in fuel:
+                params['fuel_type'] = 'electric'
+        
+        # Age/year mapping
+        if 'age' in preferences:
+            age = preferences['age']
+            if "2020 or newer" in age:
+                params['year_min'] = 2020
+            elif "2015-2020" in age:
+                params['year_min'] = 2015
+                params['year_max'] = 2020
+            elif "2010+" in age:
+                params['year_min'] = 2010
+        
+        return params
+    
+    def _score_by_preferences(self, candidates, state) -> List:
+        """Simple scoring based on user preferences and context"""
+        context = state.get('context', {})
+        preferences = state.get('preferences', {})
+        
+        scored = []
+        for car in candidates:
+            score = 0.0
+            
+            # Base score - newer cars get slight preference
+            if car.year:
+                age = CURRENT_YEAR - int(car.year)
+                score += max(0, (20 - age) / 20 * 0.2)  # Max 0.2 points for age
+            
+            # Budget alignment - prefer cars in middle of budget range
+            if car.price and 'budget' in context:
+                budget_info = context['budget']
+                if 'max' in budget_info and car.price <= budget_info['max']:
+                    score += 0.3
+                if 'min' in budget_info and car.price >= budget_info['min']:
+                    score += 0.3
+            
+            # Usage-based scoring
+            usage_context = context.get('context')
+            if usage_context == 'city' and car.mileage:
+                # City driving - prefer lower mileage
+                if car.mileage < 100000:
+                    score += 0.2
+            elif usage_context == 'family':
+                # Family use - prefer newer, reliable cars
+                if car.year and int(car.year) >= 2015:
+                    score += 0.3
+            elif usage_context == 'highway' and car.power_hp:
+                # Highway driving - prefer more power
+                if car.power_hp >= 120:
+                    score += 0.2
+            
+            # Completeness bonus
+            if car.link:
+                score += 0.05
+            if all([car.price, car.year, car.mileage, car.power_hp]):
+                score += 0.1
+            
+            scored.append((score, car))
+        
+        # Sort by score (descending), then by price (ascending), then by year (descending)
+        scored.sort(key=lambda x: (-x[0], 
+                                   x[1].price if x[1].price else float('inf'),
+                                   -(x[1].year if x[1].year else 0)))
+        
+        return [car for _, car in scored]
 
-    # wyostrzenie dopasowania (TAU = 3.0)
-    s_price   = s_price   ** TAU
-    s_mileage = s_mileage ** TAU
-    s_year    = s_year    ** TAU
-    s_power   = s_power   ** TAU
 
-    # drobne premie za kompletność oferty
-    bonus = 0.0
-    if car.link:               bonus += 0.01
-    if car.price is not None:  bonus += 0.01
-
-    score = (
-        weights_strong["price"]   * s_price +
-        weights_strong["mileage"] * s_mileage +
-        weights_strong["year"]    * s_year +
-        weights_strong["power"]   * s_power +
-        bonus
-    )
-    return float(score)
+# Global assistant instance
+car_assistant = CarAssistant()
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
+    """Main page with AI assistant interface"""
+    return templates.TemplateResponse(
+        "assistant_index.html",
+        {"request": request}
+    )
+
+
+@app.post("/chat", response_class=JSONResponse)
+async def chat(request: Request):
+    """Handle chat messages with the AI assistant"""
+    body = await request.json()
+    session_id = body.get('session_id', 'default')
+    message = body.get('message', '')
+    option_selected = body.get('option_selected')
+    action = body.get('action', 'chat')
+    
+    if action == 'start':
+        response = car_assistant.start_conversation(session_id)
+    else:
+        response = car_assistant.process_response(session_id, message, option_selected)
+    
+    return response
+
+
+@app.get("/advanced", response_class=HTMLResponse)
+async def advanced_search(request: Request):
+    """Advanced search page for users who want manual control"""
     fuel_types = get_distinct_values("fuel_type")
     gearboxes = get_distinct_values("gearbox")
     voivodeships = get_distinct_values("voivodeship")
-    # domyślne wagi 0..10 (mniejsze suwaki)
-    defaults = {"w_price": 3, "w_mileage": 7, "w_year": 2, "w_power": 1}
+    
     return templates.TemplateResponse(
-        "index.html",
+        "advanced_search.html",
         {
             "request": request,
             "fuel_types": fuel_types,
             "gearboxes": gearboxes,
             "voivodeships": voivodeships,
-            **defaults,
         },
     )
 
 
-@app.post("/results", response_class=HTMLResponse)
-async def results(
+@app.post("/advanced_results", response_class=HTMLResponse)
+async def advanced_results(
     request: Request,
-    # filtry
     fuel_type: Optional[str] = Form(None),
     gearbox: Optional[str] = Form(None),
     voivodeship: Optional[str] = Form(None),
@@ -211,13 +428,9 @@ async def results(
     year_max: Optional[str] = Form(None),
     mileage_max: Optional[str] = Form(None),
     power_min: Optional[str] = Form(None),
-    # wagi 0..10
-    w_price: Optional[str] = Form("3"),
-    w_mileage: Optional[str] = Form("7"),
-    w_year: Optional[str] = Form("2"),
-    w_power: Optional[str] = Form("1"),
 ):
-    # konwersje filtrów
+    """Handle advanced search form submission"""
+    # Convert form inputs
     price_min_f = _to_float(price_min)
     price_max_f = _to_float(price_max)
     year_min_i = _to_int(year_min)
@@ -225,7 +438,7 @@ async def results(
     mileage_max_f = _to_float(mileage_max)
     power_min_f = _to_float(power_min)
 
-    # pobranie kandydatów z bazy + deduplikacja
+    # Search database
     candidates = search(
         fuel_type=fuel_type,
         gearbox=gearbox,
@@ -238,53 +451,22 @@ async def results(
         power_min=power_min_f,
     )
     candidates = _dedup_listings(candidates)
+    
+    # Simple sort by price, then year, then mileage
+    def sort_key(car):
+        return (
+            car.price if car.price is not None else float('inf'),
+            -(car.year if car.year is not None else 0),
+            car.mileage if car.mileage is not None else float('inf')
+        )
+    
+    candidates.sort(key=sort_key)
 
-    # wagi 0..10 -> normalizacja -> silne wzmocnienie
-    w_price_v   = _to_weight_small(w_price)
-    w_mileage_v = _to_weight_small(w_mileage)
-    w_year_v    = _to_weight_small(w_year)
-    w_power_v   = _to_weight_small(w_power)
-    w_sum = w_price_v + w_mileage_v + w_year_v + w_power_v
-    if w_sum <= 0:
-        w_price_v, w_mileage_v, w_year_v, w_power_v = 3.0, 7.0, 2.0, 1.0
-        w_sum = 13.0
-    weights = {
-        "price":   w_price_v / w_sum,
-        "mileage": w_mileage_v / w_sum,
-        "year":    w_year_v / w_sum,
-        "power":   w_power_v / w_sum,
-    }
-    weights_strong = _apply_intensity_fixed(weights)
-
-    # skalery min–max po aktualnym zbiorze
-    scalers = _prep_scalers(candidates)
-
-    # liczymy wynik i stosujemy sortowanie drugorzędne dla remisów
-    scored = []
-    for c in candidates:
-        s = _score_car(c, weights_strong, scalers)
-        # tie-break: najpierw wyższy score, potem mniejszy przebieg, potem niższa cena, na końcu nowszy rocznik
-        scored.append((s, c))
-
-    # sortowanie: malejąco po score, rosnąco po przebiegu, rosnąco po cenie, malejąco po roku
-    def sort_key(t):
-        s, c = t
-        return (-s,
-                float(c.mileage) if c.mileage is not None else float("inf"),
-                float(c.price) if c.price is not None else float("inf"),
-                -(int(c.year) if c.year is not None else -10**9))
-
-    scored.sort(key=sort_key)
-    ranked = [c for _, c in scored]
-
-    top5 = ranked[:5]
     return templates.TemplateResponse(
-        "results.html",
+        "advanced_results.html",
         {
             "request": request,
-            "results": ranked[:50],
-            "top5": top5,
-            "weights": weights_strong,
-            "w_raw": {"price": w_price_v, "mileage": w_mileage_v, "year": w_year_v, "power": w_power_v},
+            "results": candidates[:50],
+            "total_found": len(candidates)
         },
     )
